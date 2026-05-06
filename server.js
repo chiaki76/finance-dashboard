@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const yahooFinance = require('yahoo-finance2').default;
+yahooFinance.suppressNotices(['yahooSurvey']);
+yahooFinance.setGlobalConfig({ validation: { logErrors: false, logOptionsErrors: false } });
 const path = require('path');
 
 const app = express();
