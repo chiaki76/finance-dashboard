@@ -299,7 +299,97 @@ app.post('/api/optimize', upload.single('file'), async (req, res) => {
   }
 });
 
+
+// ─── 相關係數 & VaR 分析 ──────────────────────────────────
+app.post('/api/correlation', async (req, res) => {
+  try {
+    const { tickers, weights } = req.body;
+    if (!tickers || tickers.length < 2) return res.status(400).json({ error: '至少需要 2 支股票' });
+
+    const histData = await Promise.all(tickers.map(async (ticker) => {
+      try {
+        const data = await yahooFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1y`);
+        const result = data.chart.result[0];
+        const closes = result.indicators.quote[0].close;
+        const timestamps = result.timestamp;
+        const daily = timestamps.map((ts, i) => ({ date: new Date(ts * 1000).toISOString().split('T')[0], close: closes[i] })).filter(d => d.close != null);
+        const returns = [];
+        for (let i = 1; i < daily.length; i++) returns.push((daily[i].close - daily[i-1].close) / daily[i-1].close);
+        return { ticker, returns, lastPrice: result.meta.regularMarketPrice };
+      } catch { return null; }
+    }));
+
+    const valid = histData.filter(Boolean);
+    if (valid.length < 2) return res.status(400).json({ error: '無法取得足夠股票數據' });
+
+    const n = valid.length;
+    const minLen = Math.min(...valid.map(v => v.returns.length));
+    const aligned = valid.map(v => v.returns.slice(-minLen));
+
+    const stats = aligned.map(rets => {
+      const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+      const variance = rets.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rets.length;
+      const std = Math.sqrt(variance);
+      const annVol = std * Math.sqrt(252) * 100;
+      const z95 = 1.645, z99 = 2.326;
+      return {
+        mean, std, annVol,
+        varDaily95: ((mean - z95 * std) * 100).toFixed(2),
+        varDaily99: ((mean - z99 * std) * 100).toFixed(2),
+        varMonthly95: ((mean * 21 - z95 * std * Math.sqrt(21)) * 100).toFixed(2),
+        varMonthly99: ((mean * 21 - z99 * std * Math.sqrt(21)) * 100).toFixed(2),
+      };
+    });
+
+    const corrMatrix = Array.from({ length: n }, (_, i) =>
+      Array.from({ length: n }, (_, j) => {
+        if (i === j) return 1;
+        let cov = 0;
+        for (let k = 0; k < minLen; k++) cov += (aligned[i][k] - stats[i].mean) * (aligned[j][k] - stats[j].mean);
+        cov /= minLen;
+        return parseFloat((cov / (stats[i].std * stats[j].std)).toFixed(4));
+      })
+    );
+
+    let portfolioVaR = null;
+    if (weights && weights.length === n) {
+      const w = weights.map(x => parseFloat(x) / 100);
+      const portMean = w.reduce((acc, wi, i) => acc + wi * stats[i].mean, 0);
+      let portVar = 0;
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++)
+          portVar += w[i] * w[j] * corrMatrix[i][j] * stats[i].std * stats[j].std;
+      const portStd = Math.sqrt(portVar);
+      const z95 = 1.645, z99 = 2.326;
+      portfolioVaR = {
+        daily95: ((portMean - z95 * portStd) * 100).toFixed(2),
+        daily99: ((portMean - z99 * portStd) * 100).toFixed(2),
+        monthly95: ((portMean * 21 - z95 * portStd * Math.sqrt(21)) * 100).toFixed(2),
+        monthly99: ((portMean * 21 - z99 * portStd * Math.sqrt(21)) * 100).toFixed(2),
+        annVol: (portStd * Math.sqrt(252) * 100).toFixed(2),
+      };
+    }
+
+    res.json({
+      tickers: valid.map(v => v.ticker),
+      corrMatrix,
+      stockStats: valid.map((v, i) => ({
+        ticker: v.ticker,
+        annVol: parseFloat(stats[i].annVol).toFixed(2),
+        varDaily95: stats[i].varDaily95,
+        varDaily99: stats[i].varDaily99,
+        varMonthly95: stats[i].varMonthly95,
+        varMonthly99: stats[i].varMonthly99,
+      })),
+      portfolioVaR,
+    });
+  } catch (err) {
+    cachedCrumb = null; cachedCookie = null;
+    res.status(500).json({ error: '相關係數計算失敗', detail: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ 金融分析伺服器啟動成功！`);
   console.log(`🌐 請開啟瀏覽器前往：http://localhost:${PORT}\n`);
-}); 
+});
