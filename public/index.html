@@ -692,7 +692,8 @@ const API = '/api';
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ec4899','#06b6d4','#f97316','#84cc16'];
 let priceChart, volChart, sharpeChart, portChart;
 let currentTicker = '', currentPeriod = '1mo';
-let holdings = [];
+// Load holdings from localStorage on startup
+let holdings = JSON.parse(localStorage.getItem('finDashHoldings') || '[]');
 let searchTimer;
 
 // ── Navigation ──────────────────────────────────────────
@@ -701,6 +702,10 @@ function switchPage(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   el.classList.add('active');
+  if (id === 'portfolio' && holdings.length > 0) {
+    document.getElementById('refresh-btn').style.display = '';
+    renderPortfolio();
+  }
 }
 
 // ── Stock Search ─────────────────────────────────────────
@@ -934,6 +939,9 @@ function sharpeClass(v) {
 }
 
 // ── Portfolio ─────────────────────────────────────────────
+function saveHoldings() {
+  localStorage.setItem('finDashHoldings', JSON.stringify(holdings));
+}
 function isTWStock(ticker) {
   return ticker.toUpperCase().endsWith('.TW') || ticker.toUpperCase().endsWith('.TWO');
 }
@@ -960,6 +968,7 @@ function addHolding() {
   document.getElementById('p-cost').value = '';
   document.getElementById('p-currency-label').textContent = '$';
 
+  saveHoldings();
   renderPortfolio();
   document.getElementById('refresh-btn').style.display = '';
   refreshPortfolio();
@@ -967,6 +976,7 @@ function addHolding() {
 
 function removeHolding(i) {
   holdings.splice(i, 1);
+  saveHoldings();
   renderPortfolio();
   if (holdings.length === 0) {
     document.getElementById('refresh-btn').style.display = 'none';
