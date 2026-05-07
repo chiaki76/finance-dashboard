@@ -642,6 +642,32 @@
             <canvas id="portChart" role="img" aria-label="投資組合持股比重圓餅圖">持股比重</canvas>
           </div>
         </div>
+
+      <!-- 相關係數 & VaR -->
+      <div id="portfolio-corr-wrap" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📐 相關係數矩陣</span>
+            <span style="font-size:11px; color:var(--muted);">深紅 = 高正相關｜深藍 = 高負相關</span>
+          </div>
+          <div id="portfolio-corr-heatmap" style="overflow-x:auto;"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">⚠️ 個別股票 VaR</span>
+            <span style="font-size:11px; color:var(--muted);">95%/99% 信心水準</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>代碼</th><th>年化波動</th><th>日VaR 95%</th><th>日VaR 99%</th><th>月VaR 95%</th><th>月VaR 99%</th></tr></thead>
+              <tbody id="portfolio-var-table"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="portfolio-port-var-card" style="display:none;" class="card">
+          <div class="card-header"><span class="card-title">📦 整體投資組合 VaR</span></div>
+          <div class="metric-grid" id="portfolio-port-var-metrics"></div>
+        </div>
+      </div>
       </div>
     </div>
 
@@ -708,9 +734,7 @@
       </div>
 
       <div id="optimize-result" style="display:none;">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-          <button class="btn btn-ghost btn-sm" onclick="runCorrelation('optimize')">📐 相關係數 & VaR</button>
-        </div>
+
         <div class="metric-grid" id="opt-stats"></div>
         <div class="two-col">
           <div class="card">
@@ -738,6 +762,32 @@
             </table>
           </div>
         </div>
+
+      <!-- 相關係數 & VaR -->
+      <div id="optimize-corr-wrap" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📐 相關係數矩陣</span>
+            <span style="font-size:11px; color:var(--muted);">深紅 = 高正相關｜深藍 = 高負相關</span>
+          </div>
+          <div id="optimize-corr-heatmap" style="overflow-x:auto;"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">⚠️ 個別股票 VaR</span>
+            <span style="font-size:11px; color:var(--muted);">95%/99% 信心水準</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>代碼</th><th>年化波動</th><th>日VaR 95%</th><th>日VaR 99%</th><th>月VaR 95%</th><th>月VaR 99%</th></tr></thead>
+              <tbody id="optimize-var-table"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="optimize-port-var-card" style="display:none;" class="card">
+          <div class="card-header"><span class="card-title">📦 整體投資組合 VaR</span></div>
+          <div class="metric-grid" id="optimize-port-var-metrics"></div>
+        </div>
+      </div>
       </div>
     </div>
   </main>
