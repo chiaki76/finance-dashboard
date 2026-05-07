@@ -591,7 +591,7 @@
         </div>
         <button class="btn btn-primary" onclick="addHolding()">新增持股</button>
         <button class="btn btn-ghost btn-sm" onclick="refreshPortfolio()" id="refresh-btn" style="display:none;">🔄 更新現價</button>
-        <button class="btn btn-ghost btn-sm" onclick="runCorrelation('portfolio')" id="portfolio-corr-btn">📐 相關係數 & VaR</button>
+
       </div>
 
       <div id="portfolio-error"></div>
@@ -691,7 +691,7 @@
             <input type="number" id="opt-max" value="25" min="3" max="50" style="width:100%;" />
           </div>
         </div>
-        <div style="border:2px dashed var(--border2); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:border 0.15s;" id="drop-zone" onclick="document.getElementById(\'csv-file\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--accent)\'" ondragleave="this.style.borderColor=\'var(--border2)\'" ondrop="handleDrop(event)">
+        <div style="border:2px dashed var(--border2); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:border 0.15s;" id="drop-zone" onclick="document.getElementById('csv-file').click()" ondragover="event.preventDefault(); this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border2)'" ondrop="handleDrop(event)">
           <div style="font-size:28px; margin-bottom:8px;">📂</div>
           <div style="color:var(--text); font-weight:500; margin-bottom:4px;">點擊上傳或拖放 CSV 檔案</div>
           <div style="font-size:12px; color:var(--muted);" id="file-name">尚未選擇檔案</div>
@@ -1492,7 +1492,7 @@ async function runCorrelation(page) {
   }
 
   if (tickers.length < 2) {
-    showError(page === 'analysis' ? 'analysis' : page === 'portfolio' ? 'portfolio' : 'optimize', '至少需要 2 支股票才能計算相關係數');
+    showError(page, '至少需要 2 支股票才能計算相關係數');
     return;
   }
 
@@ -1500,7 +1500,7 @@ async function runCorrelation(page) {
   wrapEl.style.display = 'none';
 
   // Show loading
-  const loadId = page === 'analysis' ? 'analysis' : page === 'portfolio' ? 'portfolio' : 'optimize';
+  const loadId = page;
   showLoading(loadId);
 
   try {
