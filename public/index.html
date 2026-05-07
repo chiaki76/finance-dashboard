@@ -1125,12 +1125,6 @@ function renderAnalysisResult(data) {
       </tr>
     `).join('');
 
-  } catch (err) {
-    hideLoading('analysis');
-    showError('analysis', err.message || '分析失敗');
-  }
-}
-
 } // end renderAnalysisResult
 
 function clearAnalysis() {
