@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>金融分析儀表板</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
@@ -564,7 +565,10 @@
       </div>
 
       <div id="port-summary" style="display:none;">
-        <div class="metric-grid" style="margin-top:20px;">
+        <div style="display:flex; justify-content:flex-end; margin-top:20px; margin-bottom:0;">
+          <button class="btn btn-ghost btn-sm" onclick="exportPortfolioExcel()">📥 下載 Excel</button>
+        </div>
+        <div class="metric-grid" style="margin-top:12px;">
           <div class="metric">
             <div class="metric-label">總市值</div>
             <div class="metric-value" id="p-total">--</div>
@@ -671,7 +675,8 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">最佳組合明細</span>
-            <button class="btn btn-ghost btn-sm" onclick="exportResult()">⬇ 匯出結果 CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportResult()">⬇ 匯出 CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportOptimizeExcel()" style="margin-left:6px;">📥 下載 Excel</button>
           </div>
           <div style="overflow-x:auto;">
             <table>
@@ -1263,6 +1268,124 @@ function fmtLarge(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
   return n.toLocaleString();
+}
+
+
+// ── Excel Export ──────────────────────────────────────────
+function exportPortfolioExcel() {
+  if (!holdings.length) return;
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: 持股明細
+  const holdingRows = [
+    ['代碼', '名稱', '股數', '買入均價', '貨幣', '現價', '市值', '未實現損益', '報酬率(%)'],
+    ...holdings.map(h => {
+      const value = h.curPrice ? h.shares * h.curPrice : null;
+      const cost = h.shares * h.cost;
+      const pnl = value !== null ? value - cost : null;
+      const pct = pnl !== null ? ((pnl / cost) * 100).toFixed(2) : null;
+      return [
+        h.ticker,
+        h.name || h.ticker,
+        h.shares,
+        h.cost,
+        h.currency || '$',
+        h.curPrice || '—',
+        value ? value.toFixed(2) : '—',
+        pnl !== null ? pnl.toFixed(2) : '—',
+        pct !== null ? parseFloat(pct) : '—',
+      ];
+    })
+  ];
+
+  // Summary row
+  const totalCost = holdings.reduce((a, h) => a + h.shares * h.cost, 0);
+  const totalValue = holdings.filter(h => h.curPrice).reduce((a, h) => a + h.shares * h.curPrice, 0);
+  const totalPnl = totalValue - totalCost;
+  const totalRet = totalCost > 0 ? ((totalPnl / totalCost) * 100).toFixed(2) : 0;
+
+  holdingRows.push([]);
+  holdingRows.push(['總計', '', '', '', '', '', totalValue.toFixed(2), totalPnl.toFixed(2), parseFloat(totalRet)]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(holdingRows);
+
+  // Column widths
+  ws1['!cols'] = [
+    {wch:10},{wch:25},{wch:8},{wch:12},{wch:6},{wch:12},{wch:14},{wch:14},{wch:10}
+  ];
+
+  // Style header row (bold simulation via cell format)
+  const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: '1a1e28' } } };
+
+  XLSX.utils.book_append_sheet(wb, ws1, '投資組合明細');
+
+  // Sheet 2: 摘要
+  const today = new Date().toLocaleDateString('zh-TW');
+  const summaryRows = [
+    ['投資組合摘要', ''],
+    ['產生日期', today],
+    [''],
+    ['指標', '數值'],
+    ['總市值', totalValue.toFixed(2)],
+    ['總成本', totalCost.toFixed(2)],
+    ['未實現損益', totalPnl.toFixed(2)],
+    ['總報酬率', totalRet + '%'],
+    ['持股數', holdings.length],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(summaryRows);
+  ws2['!cols'] = [{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws2, '摘要');
+
+  XLSX.writeFile(wb, `投資組合_${today.replace(/\//g,'-')}.xlsx`);
+}
+
+function exportOptimizeExcel() {
+  if (!lastResult) return;
+  const { portfolio, stats } = lastResult;
+  const today = new Date().toLocaleDateString('zh-TW');
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: 最佳組合明細
+  const detailRows = [
+    ['代碼', '名稱', '現價', '平均目標價', '潛在漲幅(%)', '券商數', '券商', '年化報酬(%)', '年化波動(%)', '夏普比率', '建議權重(%)'],
+    ...portfolio.map(s => [
+      s.ticker,
+      s.name,
+      parseFloat(s.curPrice).toFixed(2),
+      parseFloat(s.avgTarget).toFixed(2),
+      parseFloat(s.upside),
+      s.brokerCount,
+      s.brokers,
+      (s.annRet * 100).toFixed(2),
+      (s.annVol * 100).toFixed(2),
+      parseFloat(s.sharpe).toFixed(3),
+      parseFloat(s.weight),
+    ])
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(detailRows);
+  ws1['!cols'] = [
+    {wch:10},{wch:25},{wch:10},{wch:12},{wch:12},{wch:8},{wch:30},{wch:12},{wch:12},{wch:10},{wch:12}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, '最佳組合明細');
+
+  // Sheet 2: 組合統計
+  const statsRows = [
+    ['最佳投資組合統計', ''],
+    ['產生日期', today],
+    [''],
+    ['指標', '數值'],
+    ['預期年化報酬', stats.expectedReturn + '%'],
+    ['預期年化波動', stats.expectedVol + '%'],
+    ['投資組合夏普比率', stats.sharpe],
+    ['勝率（達目標價）', stats.winRate + '%'],
+    ['組合股票數', stats.stockCount],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(statsRows);
+  ws2['!cols'] = [{wch:20},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws2, '組合統計');
+
+  XLSX.writeFile(wb, `最佳投資組合_${today.replace(/\//g,'-')}.xlsx`);
 }
 
 function showLoading(id) { document.getElementById(id + '-loading').style.display = 'flex'; }
