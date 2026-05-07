@@ -520,6 +520,16 @@
           </div>
         </div>
         <div class="card">
+          <div class="card-header">
+            <span class="card-title">個股風險與報酬分析（Risk vs Return）</span>
+            <span style="font-size:11px; color:var(--muted);">圓點大小 = 夏普比率｜虛線斜率 = 夏普比率</span>
+          </div>
+          <div class="chart-wrap" style="height:320px;">
+            <canvas id="riskReturnChart" role="img" aria-label="風險報酬散佈圖"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-header"><span class="card-title">詳細數據</span></div>
           <table>
             <thead>
@@ -702,7 +712,7 @@
 <script>
 const API = '/api';
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ec4899','#06b6d4','#f97316','#84cc16'];
-let priceChart, volChart, sharpeChart, portChart;
+let priceChart, volChart, sharpeChart, portChart, riskReturnChart;
 let currentTicker = '', currentPeriod = '1mo';
 // Load holdings from localStorage on startup
 let holdings = JSON.parse(localStorage.getItem('finDashHoldings') || '[]');
@@ -925,6 +935,101 @@ async function runAnalysis() {
           y: { ticks: { color: '#6b7280', font:{size:11} }, grid: { color: 'rgba(255,255,255,0.05)' }, border: { display: false } }
         }
       }
+    });
+
+    // Risk vs Return scatter chart
+    if (riskReturnChart) riskReturnChart.destroy();
+
+    const scatterDatasets = data.map((d, i) => {
+      const vol = parseFloat(d.annualVol);
+      const ret = parseFloat(d.annualReturn);
+      const sharpe = parseFloat(d.sharpe);
+      const color = COLORS[i % COLORS.length];
+      // Line from origin to point
+      return [
+        {
+          label: d.ticker,
+          data: [{ x: vol, y: ret }],
+          backgroundColor: color,
+          borderColor: color,
+          pointRadius: Math.max(6, Math.min(20, sharpe * 8 + 8)),
+          pointHoverRadius: Math.max(8, Math.min(22, sharpe * 8 + 10)),
+          type: 'scatter',
+          showLine: false,
+          _sharpe: sharpe,
+          _name: d.name,
+        },
+        {
+          label: '_line_' + d.ticker,
+          data: [{ x: 0, y: 0 }, { x: vol * 1.05, y: ret * 1.05 }],
+          borderColor: color,
+          borderDash: [5, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          type: 'line',
+          fill: false,
+          tension: 0,
+        }
+      ];
+    }).flat();
+
+    riskReturnChart = new Chart(document.getElementById('riskReturnChart'), {
+      type: 'scatter',
+      data: { datasets: scatterDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: item => !item.dataset.label.startsWith('_line_'),
+            callbacks: {
+              label: ctx => {
+                const d = data[Math.floor(ctx.datasetIndex / 2)];
+                return [
+                  ` ${d.ticker} — ${d.name}`,
+                  ` 年化報酬：${d.annualReturn}%`,
+                  ` 年化波動：${d.annualVol}%`,
+                  ` 夏普比率：${d.sharpe}`,
+                ];
+              }
+            }
+          },
+          // Draw ticker labels on chart
+          afterDraw: null,
+        },
+        scales: {
+          x: {
+            title: { display: true, text: '年化波動性 (%)', color: '#6b7280', font: { size: 12 } },
+            ticks: { color: '#6b7280', font: { size: 11 }, callback: v => v + '%' },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            min: 0,
+          },
+          y: {
+            title: { display: true, text: '年化報酬率 (%)', color: '#6b7280', font: { size: 12 } },
+            ticks: { color: '#6b7280', font: { size: 11 }, callback: v => v + '%' },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          }
+        }
+      },
+      plugins: [{
+        id: 'tickerLabels',
+        afterDatasetsDraw(chart) {
+          const ctx2 = chart.ctx;
+          chart.data.datasets.forEach((ds, i) => {
+            if (ds.label.startsWith('_line_')) return;
+            const meta = chart.getDatasetMeta(i);
+            if (!meta.data[0]) return;
+            const pt = meta.data[0];
+            ctx2.save();
+            ctx2.font = '600 11px Sora, sans-serif';
+            ctx2.fillStyle = ds.backgroundColor;
+            ctx2.textAlign = 'left';
+            ctx2.fillText(ds.label, pt.x + (ds.pointRadius || 8) + 4, pt.y + 4);
+            ctx2.restore();
+          });
+        }
+      }]
     });
 
     // Table
