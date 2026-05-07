@@ -397,6 +397,9 @@
     <button class="nav-item" onclick="switchPage('optimize', this)">
       <span class="nav-icon">🎯</span> 最佳投資組合
     </button>
+  <div style="margin-top:auto; padding-top:24px; border-top:1px solid var(--border); font-size:10px; color:var(--muted); line-height:1.6;">
+      本網站所提供資訊僅供學術研究參考，並無任何推介買賣之意。投資人應自行承擔交易風險，本網站不負任何法律責任。
+    </div>
   </aside>
 
   <!-- Main Content -->
@@ -534,6 +537,10 @@
     <div id="page-portfolio" class="page">
       <div class="page-title">投資組合追蹤</div>
       <div class="page-sub">新增持股後點擊「更新現價」即可從 Yahoo Finance 取得最新報價</div>
+      <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:20px; font-size:12px; color:var(--muted); line-height:1.8;">
+        💾 <strong style="color:var(--accent2);">資料儲存說明：</strong>持股資料儲存在<strong style="color:var(--text);">此瀏覽器的本機記憶體</strong>，以下情況資料會保留：重新整理頁面、關閉分頁、關閉瀏覽器、重開電腦。<br>
+        以下情況資料會消失：<strong style="color:var(--down);">清除瀏覽器資料、使用無痕模式、換用其他瀏覽器或裝置。</strong>
+      </div>
 
       <div class="add-row">
         <input id="p-ticker" type="text" placeholder="代碼（如 AAPL）" style="max-width:160px;" oninput="updateCurrencyLabel()" />
