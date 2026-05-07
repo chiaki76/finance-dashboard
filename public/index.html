@@ -393,6 +393,9 @@
     <button class="nav-item" onclick="switchPage('portfolio', this)">
       <span class="nav-icon">💼</span> 投資組合
     </button>
+    <button class="nav-item" onclick="switchPage('optimize', this)">
+      <span class="nav-icon">🎯</span> 最佳投資組合
+    </button>
   </aside>
 
   <!-- Main Content -->
@@ -532,9 +535,12 @@
       <div class="page-sub">新增持股後點擊「更新現價」即可從 Yahoo Finance 取得最新報價</div>
 
       <div class="add-row">
-        <input id="p-ticker" type="text" placeholder="代碼（如 AAPL）" style="max-width:160px;" />
+        <input id="p-ticker" type="text" placeholder="代碼（如 AAPL）" style="max-width:160px;" oninput="updateCurrencyLabel()" />
         <input id="p-shares" type="number" placeholder="股數" min="0.01" step="0.01" style="max-width:120px;" />
-        <input id="p-cost" type="number" placeholder="買入均價（USD）" min="0" step="0.01" style="max-width:180px;" />
+        <div style="display:flex; align-items:center; gap:0; max-width:220px; flex:1;">
+          <span id="p-currency-label" style="background:var(--surface2); border:1px solid var(--border2); border-right:none; border-radius:var(--radius-sm) 0 0 var(--radius-sm); padding:10px 10px; font-size:13px; color:var(--muted); white-space:nowrap;">$</span>
+          <input id="p-cost" type="number" placeholder="買入均價" min="0" step="0.01" style="border-radius:0 var(--radius-sm) var(--radius-sm) 0; flex:1;" />
+        </div>
         <button class="btn btn-primary" onclick="addHolding()">新增持股</button>
         <button class="btn btn-ghost btn-sm" onclick="refreshPortfolio()" id="refresh-btn" style="display:none;">🔄 更新現價</button>
       </div>
@@ -587,6 +593,97 @@
       </div>
     </div>
 
+
+    <!-- ── 最佳投資組合 ── -->
+    <div id="page-optimize" class="page">
+      <div class="page-title">最佳投資組合</div>
+      <div class="page-sub">上傳券商目標價 CSV，系統自動選出夏普比率最高的 15~25 支股票組合</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📋 CSV 格式說明</span>
+          <button class="btn btn-ghost btn-sm" onclick="downloadSample()">⬇ 下載範例 CSV</button>
+        </div>
+        <div style="overflow-x:auto; margin-bottom:12px;">
+          <table>
+            <thead><tr><th>ticker</th><th>target_price</th><th>broker</th></tr></thead>
+            <tbody>
+              <tr><td class="ticker-cell">AAPL</td><td>250.00</td><td>Goldman Sachs</td></tr>
+              <tr><td class="ticker-cell">MSFT</td><td>480.00</td><td>Morgan Stanley</td></tr>
+              <tr><td class="ticker-cell">NVDA</td><td>160.00</td><td>JPMorgan</td></tr>
+              <tr><td class="ticker-cell">TSLA</td><td>320.00</td><td>Goldman Sachs</td></tr>
+              <tr><td class="ticker-cell">AAPL</td><td>260.00</td><td>Citi（多券商可重複）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="font-size:12px; color:var(--muted); line-height:1.8;">
+          ✅ 同一股票可以有多筆（多家券商），系統自動取平均目標價<br>
+          ✅ 支援美股、台股（加 .TW）、ETF<br>
+          ✅ 檔案需為 UTF-8 編碼的 CSV 格式
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">上傳設定</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">無風險利率（%）</label>
+            <input type="number" id="opt-rf" value="4.5" step="0.1" style="width:100%;" />
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">最少股票數</label>
+            <input type="number" id="opt-min" value="15" min="3" max="25" style="width:100%;" />
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">最多股票數</label>
+            <input type="number" id="opt-max" value="25" min="3" max="50" style="width:100%;" />
+          </div>
+        </div>
+        <div style="border:2px dashed var(--border2); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:border 0.15s;" id="drop-zone" onclick="document.getElementById(\'csv-file\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--accent)\'" ondragleave="this.style.borderColor=\'var(--border2)\'" ondrop="handleDrop(event)">
+          <div style="font-size:28px; margin-bottom:8px;">📂</div>
+          <div style="color:var(--text); font-weight:500; margin-bottom:4px;">點擊上傳或拖放 CSV 檔案</div>
+          <div style="font-size:12px; color:var(--muted);" id="file-name">尚未選擇檔案</div>
+          <input type="file" id="csv-file" accept=".csv" style="display:none;" onchange="handleFileSelect(this)" />
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="runOptimize()" id="opt-btn" disabled>🎯 開始最佳化</button>
+        </div>
+      </div>
+
+      <div id="optimize-error"></div>
+      <div id="optimize-loading" style="display:none;" class="loading">
+        <div class="spinner"></div> 正在從 Yahoo Finance 取得數據並執行馬可維茲最佳化（約 30~60 秒）…
+      </div>
+
+      <div id="optimize-result" style="display:none;">
+        <div class="metric-grid" id="opt-stats"></div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><span class="card-title">持股權重分配</span></div>
+            <div class="legend" id="opt-pie-legend"></div>
+            <div class="chart-wrap" style="height:240px;"><canvas id="optPieChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">潛在上漲空間</span></div>
+            <div class="chart-wrap" style="height:240px;"><canvas id="optBarChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">最佳組合明細</span>
+            <button class="btn btn-ghost btn-sm" onclick="exportResult()">⬇ 匯出結果 CSV</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr><th>代碼</th><th>名稱</th><th>現價</th><th>平均目標價</th><th>潛在漲幅</th><th>券商數</th><th>年化報酬</th><th>波動性</th><th>夏普</th><th>權重</th></tr>
+              </thead>
+              <tbody id="opt-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -837,16 +934,31 @@ function sharpeClass(v) {
 }
 
 // ── Portfolio ─────────────────────────────────────────────
+function isTWStock(ticker) {
+  return ticker.toUpperCase().endsWith('.TW') || ticker.toUpperCase().endsWith('.TWO');
+}
+
+function getCurrencySymbol(ticker) {
+  return isTWStock(ticker) ? 'NT$' : '$';
+}
+
+function updateCurrencyLabel() {
+  const ticker = document.getElementById('p-ticker').value.trim();
+  const label = document.getElementById('p-currency-label');
+  label.textContent = getCurrencySymbol(ticker);
+}
 function addHolding() {
   const ticker = document.getElementById('p-ticker').value.trim().toUpperCase();
   const shares = parseFloat(document.getElementById('p-shares').value);
   const cost = parseFloat(document.getElementById('p-cost').value);
   if (!ticker || !shares || !cost) { alert('請填寫代碼、股數和買入均價'); return; }
 
-  holdings.push({ ticker, shares, cost, curPrice: null, name: ticker });
+  const currency = getCurrencySymbol(ticker);
+  holdings.push({ ticker, shares, cost, curPrice: null, name: ticker, currency });
   document.getElementById('p-ticker').value = '';
   document.getElementById('p-shares').value = '';
   document.getElementById('p-cost').value = '';
+  document.getElementById('p-currency-label').textContent = '$';
 
   renderPortfolio();
   document.getElementById('refresh-btn').style.display = '';
@@ -901,8 +1013,9 @@ function renderPortfolio() {
     const pct = pnl !== null ? ((pnl / cost) * 100).toFixed(2) : null;
     totalCost += cost;
     if (value) totalValue += value;
-    const priceStr = h.curPrice ? '$' + fmt(h.curPrice) : '<span style="color:var(--muted)">—</span>';
-    const valueStr = value ? '$' + fmt(value) : '—';
+    const cur = h.currency || '$';
+    const priceStr = h.curPrice ? cur + fmt(h.curPrice) : '<span style="color:var(--muted)">—</span>';
+    const valueStr = value ? cur + fmt(value) : '—';
     const pnlStr = pnl !== null
       ? `<span class="${pnl >= 0 ? 'sharpe-good' : 'sharpe-bad'}">${pnl >= 0 ? '+' : ''}$${fmt(pnl)}</span>` : '—';
     const retStr = pct !== null
@@ -911,7 +1024,7 @@ function renderPortfolio() {
       <td class="ticker-cell">${h.ticker}</td>
       <td style="color:var(--muted); font-size:12px;">${h.name}</td>
       <td>${h.shares}</td>
-      <td>$${fmt(h.cost)}</td>
+      <td>${h.currency || '$'}${fmt(h.cost)}</td>
       <td>${priceStr}</td>
       <td>${valueStr}</td>
       <td>${pnlStr}</td>
@@ -953,6 +1066,179 @@ function renderPortfolio() {
       }
     });
   }
+}
+
+
+// ── Optimize ──────────────────────────────────────────────
+let selectedFile = null;
+let optPieChart = null, optBarChart = null;
+let lastResult = null;
+
+function handleFileSelect(input) {
+  if (input.files && input.files[0]) {
+    selectedFile = input.files[0];
+    document.getElementById('file-name').textContent = selectedFile.name;
+    document.getElementById('opt-btn').disabled = false;
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.borderColor = 'var(--border2)';
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) {
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('opt-btn').disabled = false;
+  }
+}
+
+function downloadSample() {
+  const csv = `ticker,target_price,broker
+AAPL,250.00,Goldman Sachs
+MSFT,480.00,Morgan Stanley
+NVDA,160.00,JPMorgan
+TSLA,320.00,Goldman Sachs
+AAPL,260.00,Citi
+GOOGL,210.00,Morgan Stanley
+AMZN,240.00,JPMorgan
+META,650.00,Goldman Sachs
+MSFT,490.00,Citi
+NVDA,170.00,Morgan Stanley
+NFLX,1100.00,JPMorgan
+AMD,180.00,Goldman Sachs
+CRM,380.00,Morgan Stanley
+ADBE,500.00,JPMorgan
+ORCL,200.00,Citi
+INTC,25.00,Goldman Sachs
+QCOM,200.00,Morgan Stanley
+TXN,220.00,JPMorgan
+AVGO,240.00,Goldman Sachs
+NOW,1050.00,Citi
+`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sample_targets.csv';
+  a.click();
+}
+
+async function runOptimize() {
+  if (!selectedFile) return;
+  showLoading('optimize');
+  clearError('optimize');
+  document.getElementById('optimize-result').style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('rf', document.getElementById('opt-rf').value);
+  formData.append('minStocks', document.getElementById('opt-min').value);
+  formData.append('maxStocks', document.getElementById('opt-max').value);
+
+  try {
+    const res = await fetch(`${API}/optimize`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '最佳化失敗');
+
+    hideLoading('optimize');
+    lastResult = data;
+    renderOptimizeResult(data);
+  } catch (err) {
+    hideLoading('optimize');
+    showError('optimize', err.message);
+  }
+}
+
+function renderOptimizeResult(data) {
+  const { portfolio, stats } = data;
+  document.getElementById('optimize-result').style.display = 'block';
+
+  // Stats
+  document.getElementById('opt-stats').innerHTML = `
+    <div class="metric">
+      <div class="metric-label">預期年化報酬</div>
+      <div class="metric-value sharpe-good">+${stats.expectedReturn}%</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">預期年化波動</div>
+      <div class="metric-value">${stats.expectedVol}%</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">投資組合夏普</div>
+      <div class="metric-value ${parseFloat(stats.sharpe) >= 1 ? 'sharpe-good' : parseFloat(stats.sharpe) >= 0.5 ? 'sharpe-ok' : 'sharpe-bad'}">${stats.sharpe}</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">勝率（達目標價）</div>
+      <div class="metric-value sharpe-good">${stats.winRate}%</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">組合股票數</div>
+      <div class="metric-value">${stats.stockCount}</div>
+    </div>
+  `;
+
+  // Pie chart
+  document.getElementById('opt-pie-legend').innerHTML = portfolio.slice(0, 8).map((s, i) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${COLORS[i % COLORS.length]}"></div>${s.ticker}</div>`
+  ).join('');
+
+  if (optPieChart) optPieChart.destroy();
+  optPieChart = new Chart(document.getElementById('optPieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: portfolio.map(s => s.ticker),
+      datasets: [{ data: portfolio.map(s => parseFloat(s.weight)), backgroundColor: portfolio.map((_, i) => COLORS[i % COLORS.length]), borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}%` } } } }
+  });
+
+  // Bar chart (upside)
+  const sorted = [...portfolio].sort((a, b) => parseFloat(b.upside) - parseFloat(a.upside));
+  if (optBarChart) optBarChart.destroy();
+  optBarChart = new Chart(document.getElementById('optBarChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(s => s.ticker),
+      datasets: [{ label: '潛在漲幅(%)', data: sorted.map(s => parseFloat(s.upside)), backgroundColor: sorted.map(s => parseFloat(s.upside) >= 0 ? '#22c55e' : '#ef4444'), borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw}%` } } }, scales: { x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => v + '%', color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } } } }
+  });
+
+  // Table
+  document.getElementById('opt-table').innerHTML = portfolio.map(s => `
+    <tr>
+      <td class="ticker-cell">${s.ticker}</td>
+      <td style="font-size:12px; color:var(--muted);">${s.name}</td>
+      <td>$${fmt(s.curPrice)}</td>
+      <td>$${fmt(s.avgTarget)}</td>
+      <td class="${parseFloat(s.upside) >= 0 ? 'sharpe-good' : 'sharpe-bad'}">${parseFloat(s.upside) >= 0 ? '+' : ''}${s.upside}%</td>
+      <td>${s.brokerCount}</td>
+      <td class="${parseFloat(s.annRet) >= 0 ? 'sharpe-good' : 'sharpe-bad'}">${(s.annRet * 100).toFixed(1)}%</td>
+      <td>${(s.annVol * 100).toFixed(1)}%</td>
+      <td class="${parseFloat(s.sharpe) >= 1 ? 'sharpe-good' : parseFloat(s.sharpe) >= 0.5 ? 'sharpe-ok' : 'sharpe-bad'}">${parseFloat(s.sharpe).toFixed(2)}</td>
+      <td><span class="badge badge-neutral">${s.weight}%</span></td>
+    </tr>
+  `).join('');
+}
+
+function exportResult() {
+  if (!lastResult) return;
+  const { portfolio, stats } = lastResult;
+  const rows = [
+    ['代碼', '名稱', '現價', '平均目標價', '潛在漲幅(%)', '券商數', '券商', '年化報酬(%)', '波動性(%)', '夏普比率', '權重(%)'],
+    ...portfolio.map(s => [s.ticker, s.name, s.curPrice, s.avgTarget, s.upside, s.brokerCount, s.brokers, (s.annRet * 100).toFixed(2), (s.annVol * 100).toFixed(2), parseFloat(s.sharpe).toFixed(3), s.weight]),
+    [],
+    ['預期年化報酬', stats.expectedReturn + '%'],
+    ['預期年化波動', stats.expectedVol + '%'],
+    ['夏普比率', stats.sharpe],
+    ['勝率', stats.winRate + '%'],
+  ];
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'optimal_portfolio.csv';
+  a.click();
 }
 
 // ── Helpers ───────────────────────────────────────────────
